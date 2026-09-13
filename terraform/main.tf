@@ -54,3 +54,45 @@ resource "kubernetes_job_v1" "openroad" {
     }
   }
 }
+resource "kubernetes_manifest" "openroad_job_alert" {
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "PrometheusRule"
+
+    metadata = {
+      name      = "openroad-job-alert"
+      namespace = kubernetes_namespace_v1.semiconductor_devops.metadata[0].name
+
+      labels = {
+        release = "kube-prom-stack"
+      }
+    }
+
+    spec = {
+      groups = [
+        {
+          name = "openroad-job.rules"
+
+          rules = [
+            {
+              alert = "OpenROADJobFailed"
+
+              expr = "kube_job_status_failed{namespace=\"semiconductor-devops-phase2\",job_name=\"openroad-eda-job\"} > 0"
+
+              for = "1m"
+
+              labels = {
+                severity = "critical"
+              }
+
+              annotations = {
+                summary     = "OpenROAD Kubernetes Job failed"
+                description = "The OpenROAD EDA Job has reported one or more failures."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
