@@ -22,15 +22,22 @@ pipeline {
 
         stage('Verify Environment') {
             steps {
+                echo "Jenkins workspace:"
+                echo pwd()
+
                 sh '''
                     echo "===== Jenkins Environment ====="
                     whoami
+
                     echo "Terraform:"
                     terraform version
+
                     echo "Icarus Verilog:"
                     iverilog -V | head -n 1
+
                     echo "Git:"
                     git --version
+
                     echo "Kubernetes:"
                     kubectl version --client
                 '''
@@ -72,11 +79,37 @@ pipeline {
                 }
             }
         }
+
+        stage('Review Terraform Plan') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform show -no-color phase2.tfplan'
+                }
+            }
+        }
+
+        stage('Manual Approval') {
+            steps {
+                input(
+                    message: 'Terraform plan has been reviewed. Approve deployment to Kubernetes?',
+                    ok: 'Approve Apply',
+                    cancel: 'Abort'
+                )
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('terraform') {
+                    sh 'terraform apply -input=false phase2.tfplan'
+                }
+            }
+        }
     }
 
     post {
         always {
-            echo '===== Pipeline completed up to Terraform Plan ====='
+            echo '===== Phase 2 pipeline completed ====='
         }
     }
 }
