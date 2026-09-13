@@ -10,6 +10,7 @@ pipeline {
     environment {
         TF_IN_AUTOMATION = 'true'
         TF_INPUT = 'false'
+        KUBECONFIG = '/var/lib/jenkins/.kube/config'
     }
 
     stages {
@@ -26,7 +27,13 @@ pipeline {
                 echo pwd()
 
                 sh '''
-                    echo "===== Jenkins Environment ====="
+                    set -e
+
+                    echo "================================="
+                    echo "Jenkins Environment"
+                    echo "================================="
+
+                    echo "User:"
                     whoami
 
                     echo "Terraform:"
@@ -40,6 +47,8 @@ pipeline {
 
                     echo "Kubernetes:"
                     kubectl version --client
+
+                    echo "================================="
                 '''
             }
         }
@@ -105,11 +114,70 @@ pipeline {
                 }
             }
         }
+
+        stage('Post-Deployment Verification') {
+            steps {
+                sh '''
+                    set -e
+
+                    NAMESPACE="semiconductor-devops-phase2"
+                    JOB="openroad-eda-job"
+
+                    echo "============================================="
+                    echo "POST-DEPLOYMENT VERIFICATION"
+                    echo "============================================="
+
+                    echo "1. Checking namespace..."
+                    kubectl get namespace "$NAMESPACE"
+
+                    echo "2. Waiting for OpenROAD Job to complete..."
+                    kubectl wait \
+                        --for=condition=complete \
+                        "job/$JOB" \
+                        -n "$NAMESPACE" \
+                        --timeout=120s
+
+                    echo "3. Checking Job status..."
+                    kubectl get job "$JOB" -n "$NAMESPACE"
+
+                    echo "4. Checking OpenROAD pod..."
+                    kubectl get pods \
+                        -n "$NAMESPACE" \
+                        -l app=openroad-eda
+
+                    echo "5. Reading OpenROAD output..."
+                    LOGS="$(kubectl logs "job/$JOB" -n "$NAMESPACE")"
+
+                    if [ -n "$LOGS" ]; then
+                        echo "OpenROAD output:"
+                        echo "$LOGS"
+                        echo ""
+                        echo "OPENROAD VERIFICATION PASSED"
+                    else
+                        echo "OPENROAD VERIFICATION FAILED"
+                        echo "No output was produced by the OpenROAD Job."
+                        exit 1
+                    fi
+
+                    echo "============================================="
+                    echo "POST-DEPLOYMENT VERIFICATION PASSED"
+                    echo "============================================="
+                '''
+            }
+        }
     }
 
     post {
         always {
             echo '===== Phase 2 pipeline completed ====='
+        }
+
+        success {
+            echo '===== CI/CD PIPELINE SUCCESS ====='
+        }
+
+        failure {
+            echo '===== CI/CD PIPELINE FAILED ====='
         }
     }
 }
