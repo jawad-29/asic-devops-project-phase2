@@ -1,3 +1,4 @@
+*.tfplan
 sim.vvp
 *.vvp
 *.log
