@@ -1,0 +1,8 @@
+sim.vvp
+*.vvp
+*.log
+*.out
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
