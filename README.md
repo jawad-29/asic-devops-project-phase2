@@ -1,5 +1,5 @@
-# asic-devops-project-phase2
-# ASIC DevOps Project – Phase 2
+
+# DevOps for Semiconductor and Chip Design Workflows
 
 ## Project Overview
 
