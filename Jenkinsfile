@@ -173,7 +173,7 @@ pipeline {
 
                     echo "6. Reading OpenROAD output..."
 
-                    if LOGS="$(kubectl logs "$JOB" -n "$NAMESPACE" 2>&1)"; then
+                    if LOGS="$(kubectl logs "$POD" -n "$NAMESPACE" 2>&1)"; then
                         echo "OpenROAD output:"
                         echo "$LOGS"
                     else
