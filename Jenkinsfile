@@ -130,15 +130,15 @@ pipeline {
                     echo "1. Checking namespace..."
                     kubectl get namespace "$NAMESPACE"
 
-                    echo "2. Waiting for OpenROAD Job to complete..."
+                    echo "2. Checking OpenROAD Job..."
+                    kubectl get job "$JOB" -n "$NAMESPACE"
+
+                    echo "3. Waiting for Job completion..."
                     kubectl wait \
                         --for=condition=complete \
                         "job/$JOB" \
                         -n "$NAMESPACE" \
                         --timeout=120s
-
-                    echo "3. Checking Job status..."
-                    kubectl get job "$JOB" -n "$NAMESPACE"
 
                     echo "4. Finding OpenROAD pod..."
                     POD="$(kubectl get pods \
@@ -169,16 +169,21 @@ pipeline {
                         exit 1
                     fi
 
-                    echo "OpenROAD container completed successfully."
+                    echo "OpenROAD execution confirmed successful."
 
-                    echo "6. Reading OpenROAD output..."
+                    echo "6. Attempting to retrieve OpenROAD logs..."
 
-                    if LOGS="$(kubectl logs "$POD" -n "$NAMESPACE" 2>&1)"; then
-                        echo "OpenROAD output:"
-                        echo "$LOGS"
+                    LOG_OUTPUT="$(kubectl logs "$POD" -n "$NAMESPACE" 2>&1 || true)"
+
+                    if echo "$LOG_OUTPUT" | grep -q "unable to retrieve container logs"; then
+                        echo "WARNING: Historical container logs are unavailable."
+                        echo "Job completion and container exit code 0 confirm successful execution."
+                    elif echo "$LOG_OUTPUT" | grep -q "not found"; then
+                        echo "WARNING: Container logs are unavailable."
+                        echo "Job completion and container exit code 0 confirm successful execution."
                     else
-                        echo "WARNING: OpenROAD logs are no longer available."
-                        echo "Container exit code 0 confirms successful execution."
+                        echo "OpenROAD logs:"
+                        echo "$LOG_OUTPUT"
                     fi
 
                     echo "============================================="
@@ -203,4 +208,3 @@ pipeline {
         }
     }
 }
-
