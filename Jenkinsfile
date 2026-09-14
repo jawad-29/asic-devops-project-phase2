@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -140,23 +141,45 @@ pipeline {
                     echo "3. Checking Job status..."
                     kubectl get job "$JOB" -n "$NAMESPACE"
 
-                    echo "4. Checking OpenROAD pod..."
-                    kubectl get pods \
+                    echo "4. Finding OpenROAD pod..."
+                    POD="$(kubectl get pods \
                         -n "$NAMESPACE" \
-                        -l app=openroad-eda
+                        -l app=openroad-eda \
+                        -o jsonpath='{.items[0].metadata.name}')"
 
-                    echo "5. Reading OpenROAD output..."
-                    LOGS="$(kubectl logs "job/$JOB" -n "$NAMESPACE")"
+                    if [ -z "$POD" ]; then
+                        echo "OPENROAD VERIFICATION FAILED"
+                        echo "No OpenROAD pod was found."
+                        exit 1
+                    fi
 
-                    if [ -n "$LOGS" ]; then
+                    echo "OpenROAD pod: $POD"
+                    kubectl get pod "$POD" -n "$NAMESPACE"
+
+                    echo "5. Checking OpenROAD container exit code..."
+
+                    EXIT_CODE="$(kubectl get pod "$POD" \
+                        -n "$NAMESPACE" \
+                        -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}')"
+
+                    echo "OpenROAD exit code: $EXIT_CODE"
+
+                    if [ "$EXIT_CODE" != "0" ]; then
+                        echo "OPENROAD VERIFICATION FAILED"
+                        echo "OpenROAD container did not exit successfully."
+                        exit 1
+                    fi
+
+                    echo "OpenROAD container completed successfully."
+
+                    echo "6. Reading OpenROAD output..."
+
+                    if LOGS="$(kubectl logs "$JOB" -n "$NAMESPACE" 2>&1)"; then
                         echo "OpenROAD output:"
                         echo "$LOGS"
-                        echo ""
-                        echo "OPENROAD VERIFICATION PASSED"
                     else
-                        echo "OPENROAD VERIFICATION FAILED"
-                        echo "No output was produced by the OpenROAD Job."
-                        exit 1
+                        echo "WARNING: OpenROAD logs are no longer available."
+                        echo "Container exit code 0 confirms successful execution."
                     fi
 
                     echo "============================================="
@@ -181,3 +204,5 @@ pipeline {
         }
     }
 }
+```
+
