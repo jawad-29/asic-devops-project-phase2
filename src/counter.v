@@ -1,7 +1,7 @@
 module counter (
     input wire clk,
     input wire rst,
-    output reg [4:0] count
+    output reg [3:0] count
 );
 
     // Asynchronous reset for deterministic initialization
