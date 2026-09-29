@@ -561,30 +561,3 @@ Monitoring and Alerting
 ```
 
 This provides a practical foundation for explaining how DevOps practices can support semiconductor and ASIC development workflows.
-
-````
-
-Save with:
-
-**Ctrl+O → Enter → Ctrl+X**
-
-Then run:
-
-```bash
-git diff --check
-````
-
-and:
-
-```bash
-git status
-```
-
-Since the README is currently very small, this should result in just:
-
-```text
-modified: README.md
-```
-
-After that, we'll commit the documentation and do one final repository check.
-
