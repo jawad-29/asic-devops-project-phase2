@@ -48,6 +48,9 @@ pipeline {
                     echo "Kubernetes:"
                     kubectl version --client
 
+                    echo "Jenkins Build Number:"
+                    echo "${BUILD_NUMBER}"
+
                     echo "================================="
                 '''
             }
@@ -100,7 +103,7 @@ pipeline {
         stage('Manual Approval') {
             steps {
                 input(
-                    message: 'Terraform plan has been reviewed. Approve deployment to Kubernetes?',
+                    message: 'Terraform plan has been reviewed. Approve infrastructure deployment to Kubernetes?',
                     ok: 'Approve Apply',
                     cancel: 'Abort'
                 )
@@ -115,13 +118,39 @@ pipeline {
             }
         }
 
+        stage('Create OpenROAD Job') {
+            steps {
+                sh '''
+                    set -e
+
+                    NAMESPACE="semiconductor-devops-phase2"
+                    JOB="openroad-eda-job-${BUILD_NUMBER}"
+
+                    echo "============================================="
+                    echo "CREATING OPENROAD JOB"
+                    echo "============================================="
+
+                    echo "Jenkins Build Number: ${BUILD_NUMBER}"
+                    echo "OpenROAD Job: $JOB"
+
+                    kubectl create job "$JOB" \
+                        -n "$NAMESPACE" \
+                        --image=ghcr.io/the-openroad-project/openlane:1.0.2 \
+                        -- /bin/bash -c "/build/bin/openroad -version"
+
+                    echo "OpenROAD Job created successfully."
+                    echo "Job name: $JOB"
+                '''
+            }
+        }
+
         stage('Post-Deployment Verification') {
             steps {
                 sh '''
                     set -e
 
                     NAMESPACE="semiconductor-devops-phase2"
-                    JOB="openroad-eda-job"
+                    JOB="openroad-eda-job-${BUILD_NUMBER}"
 
                     echo "============================================="
                     echo "POST-DEPLOYMENT VERIFICATION"
@@ -130,32 +159,35 @@ pipeline {
                     echo "1. Checking namespace..."
                     kubectl get namespace "$NAMESPACE"
 
-                    echo "2. Checking OpenROAD Job..."
+                    echo "2. Checking current OpenROAD Job..."
                     kubectl get job "$JOB" -n "$NAMESPACE"
 
-                    echo "3. Waiting for Job completion..."
+                    echo "3. Waiting for current Job completion..."
                     kubectl wait \
                         --for=condition=complete \
                         "job/$JOB" \
                         -n "$NAMESPACE" \
                         --timeout=120s
 
-                    echo "4. Finding OpenROAD pod..."
+                    echo "4. Finding Pod belonging to current Job..."
+
                     POD="$(kubectl get pods \
                         -n "$NAMESPACE" \
-                        -l app=openroad-eda \
+                        -l "batch.kubernetes.io/job-name=$JOB" \
                         -o jsonpath='{.items[0].metadata.name}')"
 
                     if [ -z "$POD" ]; then
                         echo "OPENROAD VERIFICATION FAILED"
-                        echo "No OpenROAD pod was found."
+                        echo "No Pod was found for Job: $JOB"
                         exit 1
                     fi
 
-                    echo "OpenROAD pod: $POD"
+                    echo "OpenROAD Pod: $POD"
+
+                    echo "5. Checking Pod status..."
                     kubectl get pod "$POD" -n "$NAMESPACE"
 
-                    echo "5. Checking OpenROAD container exit code..."
+                    echo "6. Checking OpenROAD container exit code..."
 
                     EXIT_CODE="$(kubectl get pod "$POD" \
                         -n "$NAMESPACE" \
@@ -171,7 +203,7 @@ pipeline {
 
                     echo "OpenROAD execution confirmed successful."
 
-                    echo "6. Attempting to retrieve OpenROAD logs..."
+                    echo "7. Attempting to retrieve OpenROAD logs..."
 
                     LOG_OUTPUT="$(kubectl logs "$POD" -n "$NAMESPACE" 2>&1 || true)"
 
